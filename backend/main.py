@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-
+from backend.core.threat_intelligence import check_ip_reputation
 from backend.models.security_event import SecurityEvent
 from backend.services.event_service import save_event
 from backend.core.behavior_analyzer import analyze_behavior, analyze_behavior
@@ -52,53 +52,116 @@ async def receive_event(event: SecurityEvent):
         analysis = calculate_risk(event)
 
         event.severity = analysis["severity"]
+
+
+        # -----------------------------
+        # Behavioral Analysis
+        # -----------------------------
+
         behavior = analyze_behavior(event)
+
+
+        # -----------------------------
+        # Threat Intelligence
+        # -----------------------------
+
+        reputation = check_ip_reputation(
+            event.source_ip
+        )
+
+
+        # -----------------------------
+        # Combine Risk Scores
+        # -----------------------------
+
         final_risk_score = min(
-    100,
-    analysis["risk_score"] + behavior["risk_boost"]
-)
-        final_threat_type = (
-    behavior["threat_type"]
-    if behavior["behavior_detected"]
-    else analysis["threat_type"]
-)
+            100,
+            analysis["risk_score"]
+            + behavior["risk_boost"]
+            + reputation["reputation"]
+        )
+
+
+        # -----------------------------
+        # Determine Threat Type
+        # -----------------------------
+
+        if behavior["behavior_detected"]:
+
+            final_threat_type = behavior["threat_type"]
+
+        elif reputation["known"]:
+
+            final_threat_type = reputation["threat_type"]
+
+        else:
+
+            final_threat_type = analysis["threat_type"]
+
+
         # -----------------------------
         # Store Event
         # -----------------------------
 
         event_id = save_event(
-    event,
-    risk_score=final_risk_score,
-    threat_type=final_threat_type
-)
+            event,
+            risk_score=final_risk_score,
+            threat_type=final_threat_type
+        )
+
 
         # -----------------------------
-        # Build real-time message
+        # Build Real-Time Message
         # -----------------------------
 
         alert = {
+
             "event_id": event_id,
+
             "timestamp": event.timestamp.isoformat(),
+
             "source_ip": event.source_ip,
+
             "event_type": event.event_type,
+
             "severity": event.severity,
+
             "risk_score": final_risk_score,
+
             "threat_type": final_threat_type,
-            "behavior_detected": behavior["behavior_detected"],
-            "behavior_reason": behavior["reason"],
+
+            "behavior_detected": (
+                behavior["behavior_detected"]
+            ),
+
+            "behavior_reason": (
+                behavior["reason"]
+            ),
+
+            "ip_reputation": (
+                reputation["reputation"]
+            ),
+
+            "ip_known_malicious": (
+                reputation["known"]
+            ),
+
             "message": event.message
         }
 
+
         # -----------------------------
-        # Broadcast to dashboards
+        # Broadcast to Dashboards
         # -----------------------------
 
         await manager.broadcast(alert)
+
 
         return {
             "status": "stored",
             **alert
         }
+
 
     except Exception as e:
 
