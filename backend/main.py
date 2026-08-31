@@ -6,6 +6,7 @@ from backend.models.security_event import SecurityEvent
 from backend.services.event_service import save_event
 from backend.core.behavior_analyzer import analyze_behavior, analyze_behavior
 from backend.core.threat_detector import calculate_risk
+from backend.core.attack_correlator import correlate_attack
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from backend.core.websocket_manager import manager
 from sqlalchemy import text
@@ -70,25 +71,33 @@ async def receive_event(event: SecurityEvent):
         reputation = check_ip_reputation(
             event.source_ip
         )
+        # -----------------------------
+# Attack Correlation
+# -----------------------------
 
+        correlation = correlate_attack(event)
 
         # -----------------------------
         # Combine Risk Scores
         # -----------------------------
 
-        final_risk_score = min(
-            100,
-            analysis["risk_score"]
-            + behavior["risk_boost"]
-            + reputation["reputation"]
-        )
+        final_risk_score = min( 100,
+    analysis["risk_score"]
+    + behavior["risk_boost"]
+    + reputation["reputation"]
+    + correlation["risk_boost"]
+)
 
 
-        # -----------------------------
-        # Determine Threat Type
-        # -----------------------------
+       # -----------------------------
+# Determine Final Threat Type
+# -----------------------------
 
-        if behavior["behavior_detected"]:
+        if correlation["attack_detected"]:
+
+            final_threat_type = correlation["attack_type"]
+
+        elif behavior["behavior_detected"]:
 
             final_threat_type = behavior["threat_type"]
 
@@ -147,6 +156,10 @@ async def receive_event(event: SecurityEvent):
             "ip_known_malicious": (
                 reputation["known"]
             ),
+            "attack_detected": correlation["attack_detected"],
+"attack_type": correlation["attack_type"],
+"attack_stage": correlation["attack_stage"],
+"attack_description": correlation["description"],
 
             "message": event.message
         }
@@ -304,41 +317,6 @@ def acknowledge_threat(threat_id: int):
 
         return {
             "message": "Threat acknowledged",
-            "id": threat.id,
-            "status": threat.status
-        }
-
-    finally:
-
-        db.close()
-@app.put("/threats/{threat_id}/resolve")
-def resolve_threat(threat_id: int):
-
-    db = SessionLocal()
-
-    try:
-
-        threat = (
-            db.query(ThreatDB)
-            .filter(ThreatDB.id == threat_id)
-            .first()
-        )
-
-        if not threat:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Threat not found"
-            )
-
-        threat.status = "RESOLVED"
-
-        db.commit()
-
-        db.refresh(threat)
-
-        return {
-            "message": "Threat resolved",
             "id": threat.id,
             "status": threat.status
         }
