@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from backend.core.threat_intelligence import check_ip_reputation
+from backend.database.mysql import SessionLocal
+from backend.models.threat_db import ThreatDB
 from backend.models.security_event import SecurityEvent
 from backend.services.event_service import save_event
 from backend.core.behavior_analyzer import analyze_behavior, analyze_behavior
@@ -246,3 +248,101 @@ def get_stats():
         "high_events": result["high_events"] or 0,
         "detected_threats": result["detected_threats"] or 0
     }
+@app.get("/threats")
+def get_threats():
+
+    db = SessionLocal()
+
+    try:
+
+        threats = (
+            db.query(ThreatDB)
+            .order_by(ThreatDB.id.desc())
+            .limit(100)
+            .all()
+        )
+
+        return [
+            {
+                "id": threat.id,
+                "event_id": threat.event_id,
+                "threat_type": threat.threat_type,
+                "risk_score": threat.risk_score,
+                "status": threat.status
+            }
+            for threat in threats
+        ]
+
+    finally:
+
+        db.close()
+@app.put("/threats/{threat_id}/acknowledge")
+def acknowledge_threat(threat_id: int):
+
+    db = SessionLocal()
+
+    try:
+
+        threat = (
+            db.query(ThreatDB)
+            .filter(ThreatDB.id == threat_id)
+            .first()
+        )
+
+        if not threat:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Threat not found"
+            )
+
+        threat.status = "ACKNOWLEDGED"
+
+        db.commit()
+
+        db.refresh(threat)
+
+        return {
+            "message": "Threat acknowledged",
+            "id": threat.id,
+            "status": threat.status
+        }
+
+    finally:
+
+        db.close()
+@app.put("/threats/{threat_id}/resolve")
+def resolve_threat(threat_id: int):
+
+    db = SessionLocal()
+
+    try:
+
+        threat = (
+            db.query(ThreatDB)
+            .filter(ThreatDB.id == threat_id)
+            .first()
+        )
+
+        if not threat:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Threat not found"
+            )
+
+        threat.status = "RESOLVED"
+
+        db.commit()
+
+        db.refresh(threat)
+
+        return {
+            "message": "Threat resolved",
+            "id": threat.id,
+            "status": threat.status
+        }
+
+    finally:
+
+        db.close()
