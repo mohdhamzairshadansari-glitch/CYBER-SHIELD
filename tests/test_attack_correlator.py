@@ -36,5 +36,5 @@ for event_type in test_events:
     result = correlate_attack(event)
 
     print(
-        f"{event_type} → {result}"
+        f"{event_type} -> {result}"
     )

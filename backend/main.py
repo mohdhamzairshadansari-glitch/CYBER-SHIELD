@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from backend.core.alert_formatter import create_alert
 from backend.core.threat_intelligence import check_ip_reputation
 from backend.database.mysql import SessionLocal
 from backend.models.threat_db import ThreatDB
@@ -164,18 +165,35 @@ async def receive_event(event: SecurityEvent):
             "message": event.message
         }
 
+                # -----------------------------
+        # Create Real-Time SOC Alert
+        # -----------------------------
 
+        realtime_alert = create_alert(
+            event=event,
+            analysis=analysis,
+            final_risk_score=final_risk_score,
+            final_threat_type=final_threat_type,
+            behavior=behavior,
+            reputation=reputation,
+            correlation=correlation
+        )
         # -----------------------------
         # Broadcast to Dashboards
         # -----------------------------
 
-        await manager.broadcast(alert)
+        # Broadcast only important alerts
+
+        if realtime_alert["alert_level"] in ["CRITICAL", "HIGH"]:
+
+            await manager.broadcast(realtime_alert)
 
 
         return {
-            "status": "stored",
-            **alert
-        }
+        "status": "stored",
+        **alert,
+        "realtime_alert": realtime_alert
+    }
 
 
     except Exception as e:

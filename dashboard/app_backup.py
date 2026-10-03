@@ -4,13 +4,7 @@ import pandas as pd
 import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
 
-
 API_URL = "http://127.0.0.1:8000"
-
-
-# ============================================================
-# PAGE CONFIG
-# ============================================================
 
 st.set_page_config(
     page_title="CyberShield",
@@ -20,46 +14,27 @@ st.set_page_config(
 
 st_autorefresh(interval=3000, key="live_refresh")
 
-# ============================================================
-# CSS
-# ============================================================
-
 st.markdown(
     """
     <style>
-
     .block-container {
         padding-top: 1rem;
     }
-
     </style>
     """,
     unsafe_allow_html=True
 )
 
-
-# ============================================================
-# HEADER
-# ============================================================
-
 col1, col2 = st.columns([4, 1])
 
 with col1:
-
     st.title("🛡️ CyberShield")
     st.caption("Real-Time Cybersecurity Threat Monitoring")
 
 with col2:
-
     st.success("🟢 LIVE")
 
-
 st.divider()
-
-
-# ============================================================
-# GET EVENTS
-# ============================================================
 
 try:
     events_response = requests.get(f"{API_URL}/events", timeout=5)
@@ -68,43 +43,21 @@ try:
 
     events = events_response.json() if events_response.status_code == 200 else []
     stats = stats_response.json() if stats_response.status_code == 200 else {
-        "total_events": 0,
-        "critical_events": 0,
-        "high_events": 0,
-        "detected_threats": 0,
+        "total_events": 0, "critical_events": 0, "high_events": 0, "detected_threats": 0
     }
     threats = threats_response.json() if threats_response.status_code == 200 else []
 
-
 except Exception as e:
-
     events = []
-    stats = {
-        "total_events": 0,
-        "critical_events": 0,
-        "high_events": 0,
-        "detected_threats": 0,
-    }
+    stats = {"total_events": 0, "critical_events": 0, "high_events": 0, "detected_threats": 0}
     threats = []
     st.error(f"API connection failed: {e}")
 
-
-# ============================================================
-# DATAFRAME
-# ============================================================
-
 if events:
-
     df = pd.DataFrame(events)
-
 else:
-
     df = pd.DataFrame()
 
-
-# ============================================================
-# METRICS
-# ============================================================
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -121,13 +74,7 @@ with col4:
 
 st.divider()
 
-
-# ============================================================
-# LATEST THREAT
-# ============================================================
-
 if not df.empty:
-
     latest = df.iloc[0]
     severity = latest.get("severity", "UNKNOWN")
     event_type = latest.get("event_type", "UNKNOWN")
@@ -135,47 +82,29 @@ if not df.empty:
     source_ip = latest.get("source_ip", "UNKNOWN")
 
     if severity == "CRITICAL":
-
         st.error(
             f"🚨 CRITICAL: {event_type} | "
             f"Risk: {risk_score}/100 | "
             f"Source: {source_ip}"
         )
-
     elif severity == "HIGH":
-
         st.warning(
             f"⚠️ HIGH: {event_type} | "
             f"Risk: {risk_score}/100 | "
             f"Source: {source_ip}"
         )
-
     else:
-
         st.info(
             f"🔎 Latest Event: {event_type} | "
             f"Risk: {risk_score}/100 | "
             f"Source: {source_ip}"
         )
 
-
-# ============================================================
-# CHARTS
-# ============================================================
-
 if not df.empty:
-
     col1, col2 = st.columns(2)
 
-
-    # --------------------------------------------------------
-    # EVENT TYPES
-    # --------------------------------------------------------
-
     with col1:
-
         st.subheader("🎯 Event Types")
-
         event_counts = df["event_type"].value_counts().reset_index()
         event_counts.columns = ["event_type", "count"]
         fig = px.bar(
@@ -187,13 +116,7 @@ if not df.empty:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-
-    # --------------------------------------------------------
-    # SEVERITY
-    # --------------------------------------------------------
-
     with col2:
-
         st.subheader("🚨 Severity Distribution")
         severity_counts = df["severity"].value_counts().reset_index()
         severity_counts.columns = ["severity", "count"]
@@ -207,7 +130,7 @@ if not df.empty:
             color_discrete_map=color_map
         )
         st.plotly_chart(fig, use_container_width=True)
-    
+
 st.divider()
 
 if not df.empty:
@@ -239,27 +162,14 @@ if not df.empty:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-# ============================================================
-# SECURITY EVENTS TABLE
-# ============================================================
-
 st.divider()
 
 st.subheader("🚨 Recent Security Events")
 
-
 if not df.empty:
-    columns = [
-        "id",
-        "timestamp",
-        "source_ip",
-        "destination_ip",
-        "event_type",
-        "severity",
-        "risk_score",
-        "username",
-        "message"
-    ]
+    columns = ["id", "timestamp", "source_ip", "destination_ip", "event_type", "severity", "risk_score", "username", "message"]
+    available_columns = [column for column in columns if column in df.columns]
+
     def highlight_severity(row):
         severity = row.get("severity", "")
         if severity == "CRITICAL":
@@ -268,27 +178,20 @@ if not df.empty:
             return ["background-color: #ff880033"] * len(row)
         return [""] * len(row)
 
-    available_columns = [
-        column
-        for column in columns
-        if column in df.columns
-    ]
-
     styled_df = df[available_columns].style.apply(highlight_severity, axis=1)
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=400)
 else:
     st.info("Waiting for security events...")
+
 st.divider()
 
 st.subheader("🔓 Active Threats")
 
-# ============================================================
-# AUTO REFRESH
-# ============================================================
 if threats:
     threats_df = pd.DataFrame(threats)
     open_threats = threats_df[threats_df["status"] == "OPEN"]
     ack_threats = threats_df[threats_df["status"] == "ACKNOWLEDGED"]
+
     tcol1, tcol2 = st.columns(2)
     with tcol1:
         st.metric("Open Threats", len(open_threats))
