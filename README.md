@@ -1,0 +1,1233 @@
+# 🛡️ CyberShield — Real-Time Cybersecurity Monitoring System
+
+CyberShield is a **real-time cybersecurity monitoring and threat detection system** built with **FastAPI, MySQL, MongoDB, WebSocket, and Streamlit**.
+
+The system receives security events, calculates risk scores, analyzes suspicious behavior, checks IP reputation, correlates multiple events to identify multi-stage attacks, stores security data, and provides real-time alerts through a WebSocket connection and interactive dashboard.
+
+---
+
+## 📌 Project Overview
+
+Modern systems generate a large number of security events such as:
+
+* Failed login attempts
+* Port scanning
+* Suspicious requests
+* SQL injection attempts
+* Malware detection
+* Successful logins
+* Suspicious processes
+* Repeated activities from the same IP
+
+Manually analyzing these events is difficult.
+
+**CyberShield automates this process** by assigning risk scores and identifying potential threats in real time.
+
+### Main Flow
+
+```text
+                ┌─────────────────────┐
+                │   Security Event    │
+                │  API /events        │
+                └──────────┬──────────┘
+                           │
+                           ▼
+                ┌─────────────────────┐
+                │   Risk Detection    │
+                │  Risk Score 0–100   │
+                └──────────┬──────────┘
+                           │
+             ┌─────────────┼──────────────┐
+             ▼             ▼              ▼
+      ┌────────────┐ ┌────────────┐ ┌──────────────┐
+      │  Behavior  │ │ IP Threat  │ │    Attack    │
+      │  Analysis  │ │ Intelligence│ │ Correlation  │
+      └─────┬──────┘ └──────┬─────┘ └──────┬───────┘
+            │               │               │
+            └───────────────┼───────────────┘
+                            ▼
+                  ┌──────────────────┐
+                  │ Final Risk Score │
+                  │      0 – 100     │
+                  └────────┬─────────┘
+                           │
+                 ┌─────────┴─────────┐
+                 ▼                   ▼
+        ┌────────────────┐   ┌─────────────────┐
+        │ MySQL / MongoDB│   │ Real-Time Alert │
+        │     Storage    │   │    WebSocket    │
+        └────────────────┘   └────────┬────────┘
+                                      │
+                                      ▼
+                              ┌───────────────┐
+                              │   Streamlit   │
+                              │   Dashboard   │
+                              └───────────────┘
+```
+
+---
+
+# ✨ Features
+
+## 1. Real-Time Security Event API
+
+CyberShield provides a FastAPI backend for receiving security events.
+
+Example:
+
+```http
+POST /events
+```
+
+The API processes the event and returns:
+
+* Risk score
+* Severity
+* Threat type
+* Behavior detection
+* IP reputation
+* Attack correlation
+* Real-time alert information
+
+---
+
+## 2. Risk Score Calculation
+
+Every event receives a risk score between **0 and 100**.
+
+### Base Risk Scores
+
+| Event Type         | Base Score |
+| ------------------ | ---------: |
+| NORMAL_LOGIN       |          5 |
+| FAILED_LOGIN       |         20 |
+| SUSPICIOUS_REQUEST |         35 |
+| PORT_SCAN          |         60 |
+| SQL_INJECTION      |         80 |
+| MALWARE_DETECTED   |         90 |
+| Unknown Event      |         10 |
+
+The system can increase the score based on repeated activity.
+
+### Frequency Detection
+
+For events coming from the same IP within 60 seconds:
+
+```text
+5+ events   → +15 risk
+10+ events  → +30 risk
+```
+
+The final score is capped at:
+
+```text
+100
+```
+
+---
+
+# 🚨 Severity Classification
+
+CyberShield converts the risk score into a severity level.
+
+| Risk Score | Severity |
+| ---------: | -------- |
+|       0–29 | LOW      |
+|      30–59 | MEDIUM   |
+|      60–79 | HIGH     |
+|     80–100 | CRITICAL |
+
+Example:
+
+```text
+Risk Score: 75
+Severity: HIGH
+```
+
+---
+
+# 🔍 3. Behavioral Analysis
+
+CyberShield analyzes repeated patterns instead of treating every event independently.
+
+For example:
+
+```text
+FAILED_LOGIN
+FAILED_LOGIN
+FAILED_LOGIN
+FAILED_LOGIN
+FAILED_LOGIN
+```
+
+can indicate a brute-force attack.
+
+The system can detect:
+
+```text
+BRUTE_FORCE
+```
+
+and provide a reason such as:
+
+```text
+5 failed login attempts in 5 minutes
+```
+
+Behavior detection can also increase the final risk score.
+
+---
+
+# 🌐 4. IP Reputation / Threat Intelligence
+
+CyberShield checks whether a source IP is known to be malicious.
+
+Example result:
+
+```json
+{
+    "known": true,
+    "reputation": 95,
+    "threat_type": "KNOWN_ATTACKER",
+    "description": "Known malicious source"
+}
+```
+
+A known malicious IP can significantly increase the final risk score.
+
+Unknown IP:
+
+```json
+{
+    "known": false,
+    "reputation": 0,
+    "threat_type": null
+}
+```
+
+---
+
+# 🔗 5. Attack Correlation
+
+CyberShield does not only analyze individual events.
+
+It also looks at the sequence of events generated by the same source IP.
+
+For example:
+
+```text
+PORT_SCAN
+      ↓
+FAILED_LOGIN
+      ↓
+FAILED_LOGIN
+      ↓
+FAILED_LOGIN
+      ↓
+SUCCESSFUL_LOGIN
+      ↓
+MALWARE_DETECTED
+```
+
+This can be identified as a:
+
+```text
+MULTI_STAGE_ATTACK
+```
+
+---
+
+## Attack Correlation Rules
+
+### Reconnaissance
+
+```text
+PORT_SCAN
+```
+
+Result:
+
+```text
+Attack Type: RECONNAISSANCE
+Stage: DISCOVERY
+Risk Boost: +15
+```
+
+### Account Compromise
+
+```text
+FAILED_LOGIN × 3
+        +
+SUCCESSFUL_LOGIN
+```
+
+Result:
+
+```text
+Attack Type: ACCOUNT_COMPROMISE
+Stage: INITIAL_ACCESS
+Risk Boost: +30
+```
+
+### Multi-Stage Attack
+
+```text
+PORT_SCAN
++
+3 FAILED_LOGIN
++
+SUCCESSFUL_LOGIN
++
+MALWARE_DETECTED
+```
+
+Result:
+
+```text
+Attack Type: MULTI_STAGE_ATTACK
+Stage: MALWARE_EXECUTION
+Risk Boost: +40
+```
+
+---
+
+# 🧮 6. Final Risk Score
+
+CyberShield combines multiple detection systems.
+
+Conceptually:
+
+```text
+Final Risk Score =
+    Base Risk
+    + Behavior Boost
+    + IP Reputation
+    + Attack Correlation Boost
+```
+
+The score is capped at:
+
+```text
+100
+```
+
+Example:
+
+```text
+Base Risk              = 60
+Behavior Boost         = 15
+IP Reputation          = 0
+Correlation Boost      = 15
+--------------------------------
+Final Risk             = 90
+```
+
+Therefore:
+
+```text
+Severity = CRITICAL
+```
+
+---
+
+# 🚨 7. Real-Time Alert System
+
+CyberShield generates structured alerts for security events.
+
+Alert levels:
+
+|   Risk | Alert Level | Priority |
+| -----: | ----------- | -------: |
+|   0–29 | LOW         |        4 |
+|  30–59 | MEDIUM      |        3 |
+|  60–79 | HIGH        |        2 |
+| 80–100 | CRITICAL    |        1 |
+
+Example:
+
+```json
+{
+    "alert_level": "CRITICAL",
+    "priority": 1,
+    "title": "BRUTE_FORCE DETECTED",
+    "risk_score": 100,
+    "threat_type": "BRUTE_FORCE"
+}
+```
+
+---
+
+# ⚡ 8. WebSocket Real-Time Alerts
+
+CyberShield uses WebSocket technology for real-time alert delivery.
+
+Endpoint:
+
+```text
+/ws
+```
+
+The dashboard or another WebSocket client can connect to:
+
+```text
+ws://127.0.0.1:8000/ws
+```
+
+Currently, **HIGH and CRITICAL alerts are broadcast through WebSocket**.
+
+LOW and MEDIUM events are still stored and available through the API/dashboard.
+
+---
+
+# 🗄️ 9. MySQL Database
+
+MySQL stores structured security information.
+
+Example fields:
+
+```text
+event_id
+timestamp
+source_ip
+destination_ip
+event_type
+severity
+username
+message
+risk_score
+```
+
+Threat information is also stored.
+
+Example:
+
+```text
+Threat ID
+Event ID
+Threat Type
+Risk Score
+Status
+```
+
+---
+
+# 🍃 10. MongoDB
+
+MongoDB is used for storing raw security events.
+
+This provides a flexible NoSQL storage layer for event data.
+
+The system stores the original event information using:
+
+```python
+event.model_dump()
+```
+
+This creates a useful separation:
+
+```text
+MySQL
+  ↓
+Structured / relational data
+
+MongoDB
+  ↓
+Raw / flexible event data
+```
+
+---
+
+# 🔄 11. Threat Lifecycle
+
+Threats can have different statuses.
+
+```text
+OPEN
+  ↓
+ACKNOWLEDGED
+  ↓
+RESOLVED
+```
+
+Example:
+
+```json
+{
+    "id": 551,
+    "event_id": 1964,
+    "threat_type": "BRUTE_FORCE",
+    "risk_score": 100,
+    "status": "ACKNOWLEDGED"
+}
+```
+
+The acknowledge operation is implemented through:
+
+```text
+PUT /threats/{threat_id}/acknowledge
+```
+
+---
+
+# 📊 12. Streamlit Dashboard
+
+CyberShield includes an interactive Streamlit dashboard.
+
+The dashboard can display security events and their associated risk information.
+
+Example information:
+
+```text
+Event ID
+Timestamp
+Source IP
+Event Type
+Severity
+Risk Score
+Threat Type
+```
+
+Dashboard URL:
+
+```text
+http://localhost:8501
+```
+
+---
+
+# 🏗️ Technology Stack
+
+| Technology            | Purpose                   |
+| --------------------- | ------------------------- |
+| Python                | Main programming language |
+| FastAPI               | Backend REST API          |
+| Uvicorn               | ASGI server               |
+| Pydantic              | Data validation           |
+| SQLAlchemy            | MySQL ORM                 |
+| MySQL                 | Structured event storage  |
+| MongoDB               | Raw event storage         |
+| WebSocket             | Real-time alerts          |
+| Streamlit             | Dashboard                 |
+| PyMongo               | MongoDB communication     |
+| PyMySQL               | MySQL connection          |
+| pytest / Python tests | Testing                   |
+
+---
+
+# 📁 Project Structure
+
+```text
+cyber-shield/
+│
+├── backend/
+│   ├── __init__.py
+│   │
+│   ├── main.py
+│   │
+│   ├── core/
+│   │   ├── threat_detector.py
+│   │   ├── behavior_analyzer.py
+│   │   ├── threat_intelligence.py
+│   │   ├── attack_correlator.py
+│   │   ├── alert_formatter.py
+│   │   └── websocket_manager.py
+│   │
+│   ├── database/
+│   │   ├── mysql.py
+│   │   └── mongodb.py
+│   │
+│   ├── models/
+│   │   ├── security_event.py
+│   │   ├── security_event_db.py
+│   │   └── threat_db.py
+│   │
+│   └── services/
+│       └── event_service.py
+│
+├── dashboard/
+│   └── app.py
+│
+├── tests/
+│   ├── test_behavior.py
+│   ├── test_threat_intelligence.py
+│   ├── test_attack_correlator.py
+│   ├── test_alert_formatter.py
+│   └── test_websocket.py
+│
+├── requirements.txt
+├── README.md
+└── .env
+```
+
+---
+
+# ⚙️ Installation
+
+## 1. Clone the Repository
+
+```powershell
+git clone <your-repository-url>
+cd cyber-shield
+```
+
+---
+
+## 2. Create Virtual Environment
+
+```powershell
+python -m venv venv
+```
+
+Activate it:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+---
+
+## 3. Install Dependencies
+
+```powershell
+pip install -r requirements.txt
+```
+
+---
+
+# 🗄️ Database Configuration
+
+CyberShield requires:
+
+```text
+MySQL
+MongoDB
+```
+
+Configure the database connection details in the project's configuration/environment variables.
+
+Example:
+
+```env
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=your_user
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=cybershield
+
+MONGO_URI=mongodb://localhost:27017
+MONGO_DATABASE=cybershield
+```
+
+**Do not commit real database passwords or API keys to GitHub.**
+
+---
+
+# ▶️ Running the Application
+
+CyberShield uses three terminals during development.
+
+## Terminal 1 — FastAPI Backend
+
+```powershell
+cd D:\cyber-shield
+.\venv\Scripts\Activate.ps1
+
+uvicorn backend.main:app --reload
+```
+
+Backend:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## Terminal 2 — Streamlit Dashboard
+
+```powershell
+cd D:\cyber-shield
+.\venv\Scripts\Activate.ps1
+
+python -m streamlit run dashboard\app.py
+```
+
+Dashboard:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## Terminal 3 — WebSocket Testing
+
+```powershell
+cd D:\cyber-shield
+.\venv\Scripts\Activate.ps1
+
+python -m tests.test_websocket
+```
+
+---
+
+# 📡 API Endpoints
+
+## Health Check
+
+```http
+GET /
+```
+
+Example response:
+
+```json
+{
+    "message": "CyberShield API is running",
+    "status": "online"
+}
+```
+
+---
+
+## Create Security Event
+
+```http
+POST /events
+```
+
+Example request:
+
+```json
+{
+    "timestamp": "2026-09-29T10:00:00Z",
+    "source_ip": "10.10.10.50",
+    "destination_ip": "192.168.1.10",
+    "event_type": "FAILED_LOGIN",
+    "severity": "LOW",
+    "username": "admin",
+    "message": "Failed login attempt"
+}
+```
+
+The API analyzes the event and returns the resulting risk information.
+
+---
+
+## Get Events
+
+```http
+GET /events
+```
+
+Returns stored security events.
+
+---
+
+## Get Threats
+
+```http
+GET /threats
+```
+
+Returns detected threats.
+
+---
+
+## Acknowledge Threat
+
+```http
+PUT /threats/{threat_id}/acknowledge
+```
+
+Example:
+
+```text
+PUT /threats/551/acknowledge
+```
+
+Response:
+
+```json
+{
+    "message": "Threat acknowledged",
+    "id": 551,
+    "status": "ACKNOWLEDGED"
+}
+```
+
+---
+
+## WebSocket
+
+```text
+/ws
+```
+
+Connection:
+
+```text
+ws://127.0.0.1:8000/ws
+```
+
+---
+
+# 🧪 Testing
+
+The project contains tests for the major cybersecurity components.
+
+### Behavior Detection
+
+```powershell
+python -m tests.test_behavior
+```
+
+Tests repeated failed login detection and brute-force behavior.
+
+---
+
+### Threat Intelligence
+
+```powershell
+python -m tests.test_threat_intelligence
+```
+
+Tests malicious and unknown IP reputation.
+
+---
+
+### Attack Correlation
+
+```powershell
+python -m tests.test_attack_correlator
+```
+
+Tests:
+
+```text
+Reconnaissance
+Account Compromise
+Multi-Stage Attack
+```
+
+---
+
+### Alert Formatter
+
+```powershell
+python -m tests.test_alert_formatter
+```
+
+Tests:
+
+```text
+LOW
+MEDIUM
+HIGH
+CRITICAL
+```
+
+---
+
+### WebSocket
+
+```powershell
+python -m tests.test_websocket
+```
+
+Tests real-time alert delivery.
+
+---
+
+# 🧪 Example Detection Scenarios
+
+## Scenario 1 — Normal Login
+
+```text
+Event:
+NORMAL_LOGIN
+
+Risk:
+5
+
+Severity:
+LOW
+
+Alert:
+LOW
+
+Priority:
+4
+```
+
+---
+
+## Scenario 2 — Suspicious Request
+
+```text
+Event:
+SUSPICIOUS_REQUEST
+
+Risk:
+35
+
+Severity:
+MEDIUM
+
+Alert:
+MEDIUM
+
+Priority:
+3
+```
+
+---
+
+## Scenario 3 — Port Scan
+
+```text
+Event:
+PORT_SCAN
+
+Base Risk:
+60
+
+Correlation:
+RECONNAISSANCE
+
+Risk Boost:
+15
+
+Final Risk:
+75
+
+Severity:
+HIGH
+
+Priority:
+2
+```
+
+---
+
+## Scenario 4 — Brute Force
+
+```text
+FAILED_LOGIN × 5
+
+Behavior:
+BRUTE_FORCE
+
+Risk:
+100
+
+Severity:
+CRITICAL
+
+Priority:
+1
+```
+
+---
+
+## Scenario 5 — Malware from Known Malicious IP
+
+```text
+Event:
+MALWARE_DETECTED
+
+IP Reputation:
+KNOWN_ATTACKER
+
+Final Risk:
+100
+
+Severity:
+CRITICAL
+
+Alert:
+KNOWN_ATTACKER / MALWARE DETECTED
+```
+
+---
+
+# 📈 Example End-to-End Attack
+
+A possible attack sequence:
+
+```text
+             Attacker
+                │
+                ▼
+          ┌────────────┐
+          │ Port Scan  │
+          └─────┬──────┘
+                │
+                ▼
+        ┌────────────────┐
+        │ Failed Login ×3│
+        └───────┬────────┘
+                │
+                ▼
+       ┌──────────────────┐
+       │ Successful Login │
+       └────────┬─────────┘
+                │
+                ▼
+       ┌──────────────────┐
+       │ Malware Detected │
+       └────────┬─────────┘
+                │
+                ▼
+       ┌──────────────────┐
+       │ Multi-Stage Attack│
+       └────────┬─────────┘
+                │
+                ▼
+          CRITICAL ALERT
+```
+
+---
+
+# 🔐 Security Design
+
+CyberShield follows a layered detection approach.
+
+```text
+             Security Event
+                    │
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+      Risk       Behavior       IP
+    Detection    Analysis    Reputation
+        │           │           │
+        └───────────┼───────────┘
+                    ▼
+             Attack Correlation
+                    │
+                    ▼
+             Final Risk Score
+                    │
+              ┌─────┴─────┐
+              ▼           ▼
+           Storage     Alerting
+              │           │
+        ┌─────┴────┐      ▼
+        ▼          ▼   WebSocket
+      MySQL      MongoDB   │
+                            ▼
+                        Dashboard
+```
+
+This layered approach allows CyberShield to detect both **individual suspicious events** and **larger attack patterns**.
+
+---
+
+# 📊 Current Project Validation
+
+The system has been tested using real API events.
+
+Verified functionality includes:
+
+* ✅ FastAPI server
+* ✅ Security event ingestion
+* ✅ Risk calculation
+* ✅ Severity classification
+* ✅ Behavior detection
+* ✅ Brute-force detection
+* ✅ IP reputation
+* ✅ Attack correlation
+* ✅ Multi-stage attack detection
+* ✅ Alert generation
+* ✅ Alert priority
+* ✅ MySQL event storage
+* ✅ MongoDB raw event storage
+* ✅ Threat storage
+* ✅ Threat acknowledgement
+* ✅ WebSocket alerts
+* ✅ Streamlit dashboard
+* ✅ LOW/MEDIUM/HIGH/CRITICAL alert testing
+
+Example verified brute-force event:
+
+```text
+Event ID: 1964
+Event Type: FAILED_LOGIN
+Risk Score: 100
+Severity: HIGH
+Threat: BRUTE_FORCE
+Behavior Detected: TRUE
+Behavior Reason: 5 failed login attempts in 5 minutes
+Alert Level: CRITICAL
+Priority: 1
+Threat Status: OPEN → ACKNOWLEDGED
+```
+
+---
+
+# 🚀 Future Improvements
+
+Possible future enhancements include:
+
+### 1. Redis-Based Event Tracking
+
+Currently recent events are stored in memory.
+
+```text
+defaultdict(list)
+```
+
+Redis could provide persistent and distributed event tracking.
+
+---
+
+### 2. Machine Learning Detection
+
+An ML model could be added to identify unknown attack patterns.
+
+```text
+Security Events
+      ↓
+Feature Engineering
+      ↓
+ML Model
+      ↓
+Anomaly Score
+      ↓
+Risk Engine
+```
+
+---
+
+### 3. External Threat Intelligence
+
+The IP reputation system can be extended with external threat intelligence sources.
+
+---
+
+### 4. Authentication
+
+Add:
+
+```text
+JWT Authentication
+Role-Based Access Control
+Admin/User Roles
+```
+
+---
+
+### 5. Improved Dashboard
+
+Future dashboard features could include:
+
+* Real-time charts
+* Threat trends
+* Top attacking IPs
+* Attack timeline
+* Geographic visualization
+* Threat filtering
+* Event search
+* Threat resolution
+* Export reports
+
+---
+
+### 6. Production Deployment
+
+The development architecture can eventually be deployed using:
+
+```text
+Nginx
+Docker
+Redis
+PostgreSQL/MySQL
+MongoDB
+FastAPI
+Streamlit
+```
+
+---
+
+# 🎯 Project Objectives
+
+The main objectives of CyberShield are:
+
+1. Detect suspicious security events.
+2. Calculate risk automatically.
+3. Detect repeated malicious behavior.
+4. Identify potentially malicious IP addresses.
+5. Correlate multiple events into attack chains.
+6. Generate real-time security alerts.
+7. Store structured and raw security information.
+8. Provide a visual cybersecurity dashboard.
+9. Support threat lifecycle management.
+10. Demonstrate an end-to-end cybersecurity monitoring architecture.
+
+---
+
+# 👨‍💻 Project Status
+
+**Current Status: Functional Prototype / Development Version**
+
+The major components of the CyberShield architecture are implemented and have been tested individually and through end-to-end API scenarios.
+
+Current development/testing includes:
+
+```text
+Step 16 — End-to-End Integration Testing
+
+16.1  Basic Event Integration       ✅
+16.2  Brute-Force Integration       ✅
+16.3  Threat Storage                ✅
+16.4  Threat Acknowledgement        ✅
+16.5  Threat Resolution             🔄
+```
+
+---
+
+# 📚 Learning Outcomes
+
+This project demonstrates practical experience with:
+
+* REST API development
+* FastAPI
+* WebSocket programming
+* Database integration
+* SQLAlchemy
+* MySQL
+* MongoDB
+* Event-driven architecture
+* Risk scoring
+* Cybersecurity threat detection
+* Behavioral analysis
+* Threat intelligence
+* Attack correlation
+* Real-time dashboards
+* API testing
+* Software architecture
+* End-to-end integration testing
+
+---
+
+# 📜 License
+
+This project is intended primarily for **educational and research purposes**.
+
+---
+
+# 👤 Author
+
+**Mohd Hamza Irshad Ansari**
+
+B.Tech — Data Science & Artificial Intelligencegive 
+
+Project:
+
+**CyberShield — Real-Time Cybersecurity Monitoring System**
