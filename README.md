@@ -1226,7 +1226,7 @@ This project is intended primarily for **educational and research purposes**.
 
 **Mohd Hamza Irshad Ansari**
 
-B.Tech — Data Science & Artificial Intelligencegive 
+B.Tech — Data Science & Artificial Intelligence 
 
 Project:
 
