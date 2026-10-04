@@ -632,7 +632,7 @@ CyberShield uses three terminals during development.
 cd D:\cyber-shield
 .\venv\Scripts\Activate.ps1
 
-uvicorn backend.main:app --reload
+python -m uvicorn backend.main:app --reload
 ```
 
 Backend:
